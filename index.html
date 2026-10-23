@@ -3,20 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>黃雅智有機木瓜出貨統計</title>
+    <title>木瓜出貨登記小幫手</title>
     
     <!-- PWA / 手機加入主畫面支援 -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="木瓜出貨統計">
+    <meta name="apple-mobile-web-app-title" content="木瓜出貨登記小幫手">
     <meta name="theme-color" content="#78350f">
     <link rel="apple-touch-icon" href="https://placehold.co/192x192/78350f/ffffff?text=木瓜">
     
     <!-- 動態 Web Manifest 讓手機可以安裝成 App -->
     <script>
         const manifestData = {
-            "name": "黃雅智有機木瓜出貨統計",
-            "short_name": "木瓜出貨統計",
+            "name": "木瓜出貨登記小幫手",
+            "short_name": "木瓜出貨登記小幫手",
             "start_url": window.location.href,
             "display": "standalone",
             "background_color": "#f8fafc",
@@ -52,8 +52,8 @@
     <!-- 頂部標題與總箱數 -->
     <header class="bg-white border-b border-slate-200 sticky top-0 z-40 px-4 py-3 shadow-sm">
         <div class="max-w-4xl mx-auto flex items-center justify-between">
-            <h1 class="text-sm sm:text-base font-black text-amber-800 flex items-center gap-1.5">
-                🍈 黃雅智有機木瓜出貨統計 <span class="text-[10px] font-normal text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">App版</span>
+            <h1 class="text-xs sm:text-base font-black text-amber-800 flex items-center gap-1.5">
+                🍈 木瓜出貨登記小幫手
             </h1>
             <div class="flex items-center gap-2">
                 <div class="bg-amber-50 border border-amber-200 px-3 py-1 rounded-xl text-right flex items-center gap-1">
@@ -90,7 +90,7 @@
             </div>
             <!-- 視覺化方格容器 -->
             <div id="gridVisualList" class="space-y-3 max-h-80 overflow-y-auto pr-1">
-                <p class="text-slate-500 text-center py-8 text-xs">尚無箱數紀錄，請從下方點選或輸入顆數</p>
+                <p class="text-slate-500 text-center py-8 text-xs">載入中或尚無箱數紀錄...</p>
             </div>
         </section>
 
@@ -98,7 +98,7 @@
         <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-3">
             <div class="flex items-center justify-between mb-2 px-1">
                 <h2 class="text-xs font-bold text-slate-700">👆 點選顆數 (直接 +1 箱)</h2>
-                <span class="text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded font-medium">快速點選 (10~55顆)</span>
+                <span class="text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded font-medium">常用顆數 (10~55顆)</span>
             </div>
             
             <!-- 網格大按鈕 -->
@@ -172,25 +172,12 @@
         <span id="toastMsg">通知</span>
     </div>
 
-    <!-- JavaScript 邏輯 -->
+    <!-- 程式邏輯 (本機自動儲存 LocalStorage) -->
     <script>
-        // 自動載入已儲存的紀錄，重新整理或關掉 App 也不會遺失
-        let records = JSON.parse(localStorage.getItem('papaya_simple_records_v7')) || [];
-        let reportDate = localStorage.getItem('papaya_simple_date_v7') || new Date().toISOString().split('T')[0];
-        let reportClient = localStorage.getItem('papaya_simple_client_v7') || '';
+        let records = [];
+        let reportDate = new Date().toISOString().split('T')[0];
+        let reportClient = '';
         let editingIndex = null;
-
-        document.getElementById('reportDate').value = reportDate;
-        document.getElementById('reportClient').value = reportClient;
-
-        document.getElementById('reportDate').addEventListener('change', (e) => {
-            reportDate = e.target.value;
-            localStorage.setItem('papaya_simple_date_v7', reportDate);
-        });
-        document.getElementById('reportClient').addEventListener('input', (e) => {
-            reportClient = e.target.value;
-            localStorage.setItem('papaya_simple_client_v7', reportClient);
-        });
 
         // 常用木瓜顆數大按鈕清單 (10 ~ 55)
         const popularSizes = [
@@ -203,10 +190,48 @@
 
         window.onload = function() {
             renderTouchPad();
+            
+            // 載入本機儲存資料
+            records = JSON.parse(localStorage.getItem('papaya_simple_records_v8')) || [];
+            reportDate = localStorage.getItem('papaya_simple_date_v8') || reportDate;
+            reportClient = localStorage.getItem('papaya_simple_client_v8') || '';
+            
+            document.getElementById('reportDate').value = reportDate;
+            document.getElementById('reportClient').value = reportClient;
+
+            document.getElementById('reportDate').addEventListener('change', (e) => {
+                reportDate = e.target.value;
+                saveToLocal();
+            });
+            document.getElementById('reportClient').addEventListener('input', (e) => {
+                reportClient = e.target.value;
+                saveToLocal();
+            });
+
+            document.getElementById('quickForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                const input = document.getElementById('inputCount');
+                const count = parseInt(input.value);
+                if (isNaN(count) || count <= 0) {
+                    showToast('請輸入有效的木瓜顆數！');
+                    return;
+                }
+                addRecord(count);
+                input.value = '';
+                input.focus();
+            });
+
             renderAll();
         };
 
-        function renderTouchPad() {
+        function saveToLocal() {
+            localStorage.setItem('papaya_simple_records_v8', JSON.stringify(records));
+            localStorage.setItem('papaya_simple_date_v8', reportDate);
+            localStorage.setItem('papaya_simple_client_v8', reportClient);
+            renderAll();
+        }
+
+        window.renderTouchPad = function() {
             const container = document.getElementById('touchPadButtons');
             container.innerHTML = popularSizes.map(num => `
                 <button type="button" onclick="quickAdd(${num})" 
@@ -215,49 +240,34 @@
                     <span class="text-[9px] font-normal opacity-75">顆</span>
                 </button>
             `).join('');
-        }
+        };
 
-        document.getElementById('quickForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const input = document.getElementById('inputCount');
-            const count = parseInt(input.value);
-
-            if (isNaN(count) || count <= 0) {
-                showToast('請輸入有效的木瓜顆數！');
-                return;
-            }
-
-            addRecord(count);
-            input.value = '';
-            input.focus();
-        });
-
-        function quickAdd(count) {
+        window.quickAdd = function(count) {
             addRecord(count);
             showToast(`✅ 已登記：${count} 顆裝`);
-        }
+        };
 
-        function addRecord(count) {
+        window.addRecord = function(count) {
             const newRecord = {
                 id: Date.now() + Math.random(),
                 count: count,
                 time: new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })
             };
             records.push(newRecord);
-            saveAndRefresh();
-        }
+            saveToLocal();
+        };
 
-        function undoLast() {
+        window.undoLast = function() {
             if (records.length === 0) {
                 showToast('沒有記錄可以復原');
                 return;
             }
             const removed = records.pop();
-            saveAndRefresh();
+            saveToLocal();
             showToast(`已復原最後一筆 (${removed.count} 顆)`);
-        }
+        };
 
-        function openEditModal(index) {
+        window.openEditModal = function(index) {
             editingIndex = index;
             const r = records[index];
             document.getElementById('editModalInfo').innerText = `正在修改第 #${index + 1} 箱 (目前 ${r.count} 顆)`;
@@ -267,14 +277,14 @@
                 document.getElementById('editModalInput').focus();
                 document.getElementById('editModalInput').select();
             }, 50);
-        }
+        };
 
-        function closeEditModal() {
+        window.closeEditModal = function() {
             document.getElementById('editModal').classList.add('hidden');
             editingIndex = null;
-        }
+        };
 
-        function saveEditModal() {
+        window.saveEditModal = function() {
             if (editingIndex === null) return;
             const newVal = parseInt(document.getElementById('editModalInput').value);
             if (isNaN(newVal) || newVal <= 0) {
@@ -282,30 +292,25 @@
                 return;
             }
             records[editingIndex].count = newVal;
-            saveAndRefresh();
+            saveToLocal();
             closeEditModal();
             showToast(`✅ 已更新第 #${editingIndex + 1} 箱為 ${newVal} 顆`);
-        }
+        };
 
-        function deleteRecord(index) {
+        window.deleteRecord = function(index) {
             records.splice(index, 1);
-            saveAndRefresh();
+            saveToLocal();
             showToast('已刪除該筆紀錄');
-        }
+        };
 
-        function clearAllData() {
+        window.clearAllData = function() {
             if (records.length === 0) return;
             if (confirm('確定要清空所有登記資料嗎？')) {
                 records = [];
-                saveAndRefresh();
+                saveToLocal();
                 showToast('已全部清空');
             }
-        }
-
-        function saveAndRefresh() {
-            localStorage.setItem('papaya_simple_records_v7', JSON.stringify(records));
-            renderAll();
-        }
+        };
 
         function renderAll() {
             const totalBoxes = records.length;
@@ -336,7 +341,7 @@
             // 2. 倉庫庫存視覺化圖示表 (每 20 箱為一區，區內上下兩排各 10 箱，上下蛇形編號)
             const gridVisualList = document.getElementById('gridVisualList');
             if (totalBoxes === 0) {
-                gridVisualList.innerHTML = `<p class="text-slate-500 text-center py-8 text-xs">尚無箱數紀錄, 請從下方點選或輸入顆數</p>`;
+                gridVisualList.innerHTML = `<p class="text-slate-500 text-center py-8 text-xs">尚無箱數紀錄，請從下方點選或輸入顆數</p>`;
             } else {
                 let sectionsHtml = '';
                 const totalSections = Math.ceil(totalBoxes / 20);
@@ -349,7 +354,6 @@
                     let bottomRowHtml = '';
 
                     for (let col = 0; col < 10; col++) {
-                        // 上排箱號序位 (例如第一行上方是第 1 箱，第二行上方是第 3 箱...)
                         const topArrIdx = sectionStartIdx + (col * 2);
                         if (topArrIdx < totalBoxes) {
                             const r = records[topArrIdx];
@@ -365,7 +369,6 @@
                             topRowHtml += `<div class="bg-slate-800/40 border border-slate-700/30 rounded-lg p-1 opacity-25"></div>`;
                         }
 
-                        // 下排箱號序位 (例如第一行下方是第 2 箱，第二行下方是第 4 箱...)
                         const bottomArrIdx = sectionStartIdx + (col * 2) + 1;
                         if (bottomArrIdx < totalBoxes) {
                             const r = records[bottomArrIdx];
@@ -428,7 +431,7 @@
             }
         }
 
-        function exportReport() {
+        window.exportReport = function() {
             if (records.length === 0) {
                 showToast('沒有資料可供複製！');
                 return;
@@ -439,7 +442,7 @@
                 countsMap[r.count] = (countsMap[r.count] || 0) + 1;
             });
 
-            let text = `【黃雅智有機木瓜出貨統計】\n`;
+            let text = `【黃雅智-有機木瓜】\n`;
             if (reportDate) text += `日期：${reportDate}\n`;
             if (reportClient) text += `客戶：${reportClient}\n`;
             text += `總箱數：${records.length} 箱\n`;
@@ -458,16 +461,16 @@
             document.body.removeChild(textarea);
 
             showToast('📋 已複製文字清單，可直接貼給廠商！');
-        }
+        };
 
-        function showToast(msg) {
+        window.showToast = function(msg) {
             const toast = document.getElementById('toast');
             document.getElementById('toastMsg').innerText = msg;
             toast.classList.remove('translate-y-20', 'opacity-0');
             setTimeout(() => {
                 toast.classList.add('translate-y-20', 'opacity-0');
             }, 1800);
-        }
+        };
     </script>
 </body>
 </html>
