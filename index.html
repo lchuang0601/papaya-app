@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>黃雅智有機木瓜出貨統計</title>
+    
+    <!-- PWA / 手機加入主畫面支援 -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="木瓜出貨統計">
+    <meta name="theme-color" content="#78350f">
+    <link rel="apple-touch-icon" href="https://placehold.co/192x192/78350f/ffffff?text=木瓜">
+    
+    <!-- 動態 Web Manifest 讓手機可以安裝成 App -->
+    <script>
+        const manifestData = {
+            "name": "黃雅智有機木瓜出貨統計",
+            "short_name": "木瓜出貨統計",
+            "start_url": window.location.href,
+            "display": "standalone",
+            "background_color": "#f8fafc",
+            "theme_color": "#78350f",
+            "icons": [{
+                "src": "https://placehold.co/192x192/78350f/ffffff?text=木瓜",
+                "sizes": "192x192",
+                "type": "image/png"
+            }]
+        };
+        const stringManifest = JSON.stringify(manifestData);
+        const blob = new Blob([stringManifest], {type: 'application/json'});
+        const manifestURL = URL.createObjectURL(blob);
+        const link = document.createElement('link');
+        link.rel = 'manifest';
+        link.href = manifestURL;
+        document.head.appendChild(link);
+    </script>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800 pb-28">
+
+    <!-- 頂部標題與總箱數 -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-40 px-4 py-3 shadow-sm">
+        <div class="max-w-4xl mx-auto flex items-center justify-between">
+            <h1 class="text-sm sm:text-base font-black text-amber-800 flex items-center gap-1.5">
+                🍈 黃雅智有機木瓜出貨統計 <span class="text-[10px] font-normal text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">App版</span>
+            </h1>
+            <div class="flex items-center gap-2">
+                <div class="bg-amber-50 border border-amber-200 px-3 py-1 rounded-xl text-right flex items-center gap-1">
+                    <span class="text-xs text-slate-500 font-bold">總箱數:</span>
+                    <span id="grandTotalBoxes" class="text-base font-black text-amber-900">0 箱</span>
+                </div>
+                <button onclick="clearAllData()" class="bg-rose-50 hover:bg-rose-100 text-rose-600 px-2.5 py-1.5 rounded-xl text-xs font-bold transition">
+                    🗑️ 清空
+                </button>
+            </div>
+        </div>
+        <!-- 日期與客戶 -->
+        <div class="max-w-4xl mx-auto flex items-center gap-4 mt-2 pt-2 border-t border-slate-100 text-xs">
+            <div class="flex items-center gap-1">
+                <span class="text-slate-500">日期:</span>
+                <input type="date" id="reportDate" class="bg-transparent border-b border-slate-300 px-1 font-medium focus:outline-none">
+            </div>
+            <div class="flex items-center gap-1 flex-1 max-w-xs">
+                <span class="text-slate-500">客戶:</span>
+                <input type="text" id="reportClient" placeholder="輸入客戶名稱" class="bg-transparent border-b border-slate-300 px-1 font-medium focus:outline-none w-full">
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-4xl mx-auto p-3 sm:p-4 space-y-4">
+        
+        <!-- 💡 畫面最上方：倉庫庫存圖示對照表 (每 20 箱為一區，區內上下兩排各 10 箱，上下蛇形編號) -->
+        <section class="bg-slate-900 text-white rounded-2xl shadow-md p-4 border border-slate-800">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-xs sm:text-sm font-black text-amber-400 flex items-center gap-1.5">
+                    📦 倉庫庫存圖示表 <span class="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded-md font-normal">每區20箱・蛇形編號・點擊可改</span>
+                </h2>
+                <span id="modalTotalInfo" class="text-xs text-amber-300/90 font-bold bg-slate-800 px-2.5 py-1 rounded-lg">總共 0 箱</span>
+            </div>
+            <!-- 視覺化方格容器 -->
+            <div id="gridVisualList" class="space-y-3 max-h-80 overflow-y-auto pr-1">
+                <p class="text-slate-500 text-center py-8 text-xs">尚無箱數紀錄，請從下方點選或輸入顆數</p>
+            </div>
+        </section>
+
+        <!-- 手機大按鈕點選區 (10 ~ 55 顆) -->
+        <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-3">
+            <div class="flex items-center justify-between mb-2 px-1">
+                <h2 class="text-xs font-bold text-slate-700">👆 點選顆數 (直接 +1 箱)</h2>
+                <span class="text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded font-medium">快速點選 (10~55顆)</span>
+            </div>
+            
+            <!-- 網格大按鈕 -->
+            <div class="grid grid-cols-6 sm:grid-cols-8 gap-1.5 mb-3" id="touchPadButtons">
+                <!-- 動態產生 -->
+            </div>
+
+            <!-- 自訂顆數快速輸入與 Enter 自動登記 -->
+            <form id="quickForm" class="flex gap-2 pt-2 border-t border-slate-100 max-w-md">
+                <input type="number" id="inputCount" min="1" max="100" placeholder="手動輸入其他顆數..." 
+                    class="flex-1 px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:outline-none text-sm font-bold">
+                <button type="submit" class="bg-amber-700 hover:bg-amber-800 text-white text-xs font-bold px-4 py-2 rounded-xl transition shadow-sm">
+                    新增
+                </button>
+            </form>
+        </section>
+
+        <!-- 雙欄區塊：廠商統計與輸入明細 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            
+            <!-- 廠商統計清單區 -->
+            <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4">
+                <div class="flex items-center justify-between mb-3">
+                    <h2 class="text-xs font-bold text-slate-700">📋 廠商統計 (規格箱數)</h2>
+                    <button onclick="exportReport()" class="bg-amber-700 hover:bg-amber-800 text-white px-3 py-1.5 rounded-xl font-bold text-xs transition shadow-sm flex items-center gap-1">
+                        📥 複製文字清單
+                    </button>
+                </div>
+
+                <!-- 文字統計列表容器 -->
+                <div id="summaryList" class="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm space-y-1.5 min-h-[80px]">
+                    <p class="text-slate-400 text-center py-4 text-xs">尚無登記資料</p>
+                </div>
+            </section>
+
+            <!-- 最近輸入明細與修改/刪除 -->
+            <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4">
+                <div class="flex items-center justify-between mb-2">
+                    <h2 class="text-xs font-bold text-slate-700">📜 輸入明細紀錄</h2>
+                    <div class="flex items-center gap-2">
+                        <button onclick="undoLast()" class="text-[11px] bg-amber-50 hover:bg-amber-100 text-amber-800 px-2 py-0.5 rounded-lg font-bold transition border border-amber-200">
+                            ↩️ 復原上一筆
+                        </button>
+                        <span id="recordCount" class="text-[11px] text-slate-400">共 0 筆</span>
+                    </div>
+                </div>
+                <div id="historyList" class="max-h-48 overflow-y-auto space-y-1.5 pr-1 text-xs">
+                    <p class="text-slate-400 text-center py-4">無紀錄</p>
+                </div>
+            </section>
+
+        </div>
+
+    </main>
+
+    <!-- 修改視窗 Modal -->
+    <div id="editModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl p-5 max-w-xs w-full shadow-xl space-y-4">
+            <h3 class="text-sm font-black text-slate-800">修改箱子顆數</h3>
+            <p class="text-xs text-slate-500" id="editModalInfo">正在修改第 #1 箱</p>
+            <input type="number" id="editModalInput" min="1" max="100" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-base font-bold focus:ring-2 focus:ring-amber-500 focus:outline-none">
+            <div class="flex gap-2 pt-2">
+                <button type="button" onclick="closeEditModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 py-2 rounded-xl text-xs font-bold transition">取消</button>
+                <button type="button" onclick="saveEditModal()" class="flex-1 bg-amber-700 hover:bg-amber-800 text-white py-2 rounded-xl text-xs font-bold transition shadow-sm">確認修改</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 訊息通知 Toast -->
+    <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-4 py-2 rounded-xl shadow-xl transform translate-y-20 opacity-0 transition-all duration-300 z-50 text-xs font-bold pointer-events-none whitespace-nowrap">
+        <span id="toastMsg">通知</span>
+    </div>
+
+    <!-- JavaScript 邏輯 -->
+    <script>
+        // 自動載入已儲存的紀錄，重新整理或關掉 App 也不會遺失
+        let records = JSON.parse(localStorage.getItem('papaya_simple_records_v7')) || [];
+        let reportDate = localStorage.getItem('papaya_simple_date_v7') || new Date().toISOString().split('T')[0];
+        let reportClient = localStorage.getItem('papaya_simple_client_v7') || '';
+        let editingIndex = null;
+
+        document.getElementById('reportDate').value = reportDate;
+        document.getElementById('reportClient').value = reportClient;
+
+        document.getElementById('reportDate').addEventListener('change', (e) => {
+            reportDate = e.target.value;
+            localStorage.setItem('papaya_simple_date_v7', reportDate);
+        });
+        document.getElementById('reportClient').addEventListener('input', (e) => {
+            reportClient = e.target.value;
+            localStorage.setItem('papaya_simple_client_v7', reportClient);
+        });
+
+        // 常用木瓜顆數大按鈕清單 (10 ~ 55)
+        const popularSizes = [
+            10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+            20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
+            30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
+            40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
+            50, 51, 52, 53, 54, 55
+        ];
+
+        window.onload = function() {
+            renderTouchPad();
+            renderAll();
+        };
+
+        function renderTouchPad() {
+            const container = document.getElementById('touchPadButtons');
+            container.innerHTML = popularSizes.map(num => `
+                <button type="button" onclick="quickAdd(${num})" 
+                    class="bg-amber-50 hover:bg-amber-600 hover:text-white text-amber-900 font-black py-2.5 px-1 rounded-xl text-sm sm:text-base transition border border-amber-200 shadow-sm active:scale-95 flex flex-col items-center justify-center">
+                    <span>${num}</span>
+                    <span class="text-[9px] font-normal opacity-75">顆</span>
+                </button>
+            `).join('');
+        }
+
+        document.getElementById('quickForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const input = document.getElementById('inputCount');
+            const count = parseInt(input.value);
+
+            if (isNaN(count) || count <= 0) {
+                showToast('請輸入有效的木瓜顆數！');
+                return;
+            }
+
+            addRecord(count);
+            input.value = '';
+            input.focus();
+        });
+
+        function quickAdd(count) {
+            addRecord(count);
+            showToast(`✅ 已登記：${count} 顆裝`);
+        }
+
+        function addRecord(count) {
+            const newRecord = {
+                id: Date.now() + Math.random(),
+                count: count,
+                time: new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })
+            };
+            records.push(newRecord);
+            saveAndRefresh();
+        }
+
+        function undoLast() {
+            if (records.length === 0) {
+                showToast('沒有記錄可以復原');
+                return;
+            }
+            const removed = records.pop();
+            saveAndRefresh();
+            showToast(`已復原最後一筆 (${removed.count} 顆)`);
+        }
+
+        function openEditModal(index) {
+            editingIndex = index;
+            const r = records[index];
+            document.getElementById('editModalInfo').innerText = `正在修改第 #${index + 1} 箱 (目前 ${r.count} 顆)`;
+            document.getElementById('editModalInput').value = r.count;
+            document.getElementById('editModal').classList.remove('hidden');
+            setTimeout(() => {
+                document.getElementById('editModalInput').focus();
+                document.getElementById('editModalInput').select();
+            }, 50);
+        }
+
+        function closeEditModal() {
+            document.getElementById('editModal').classList.add('hidden');
+            editingIndex = null;
+        }
+
+        function saveEditModal() {
+            if (editingIndex === null) return;
+            const newVal = parseInt(document.getElementById('editModalInput').value);
+            if (isNaN(newVal) || newVal <= 0) {
+                showToast('請輸入有效的顆數！');
+                return;
+            }
+            records[editingIndex].count = newVal;
+            saveAndRefresh();
+            closeEditModal();
+            showToast(`✅ 已更新第 #${editingIndex + 1} 箱為 ${newVal} 顆`);
+        }
+
+        function deleteRecord(index) {
+            records.splice(index, 1);
+            saveAndRefresh();
+            showToast('已刪除該筆紀錄');
+        }
+
+        function clearAllData() {
+            if (records.length === 0) return;
+            if (confirm('確定要清空所有登記資料嗎？')) {
+                records = [];
+                saveAndRefresh();
+                showToast('已全部清空');
+            }
+        }
+
+        function saveAndRefresh() {
+            localStorage.setItem('papaya_simple_records_v7', JSON.stringify(records));
+            renderAll();
+        }
+
+        function renderAll() {
+            const totalBoxes = records.length;
+            document.getElementById('grandTotalBoxes').innerText = `${totalBoxes} 箱`;
+            document.getElementById('recordCount').innerText = `共 ${totalBoxes} 筆`;
+            document.getElementById('modalTotalInfo').innerText = `總共 ${totalBoxes} 箱`;
+
+            // 1. 統計各規格箱數
+            const countsMap = {};
+            records.forEach(r => {
+                countsMap[r.count] = (countsMap[r.count] || 0) + 1;
+            });
+
+            const sortedKeys = Object.keys(countsMap).map(Number).sort((a,b) => a - b);
+            
+            const summaryList = document.getElementById('summaryList');
+            if (sortedKeys.length === 0) {
+                summaryList.innerHTML = `<p class="text-slate-400 text-center py-4 text-xs">尚無登記資料</p>`;
+            } else {
+                summaryList.innerHTML = sortedKeys.map(k => `
+                    <div class="flex justify-between items-center py-1.5 px-3 bg-white rounded-lg border border-slate-100 shadow-2xs">
+                        <span class="font-bold text-amber-900">${k} 顆裝</span>
+                        <span class="font-black text-slate-800 text-base">${countsMap[k]} 箱</span>
+                    </div>
+                `).join('');
+            }
+
+            // 2. 倉庫庫存視覺化圖示表 (每 20 箱為一區，區內上下兩排各 10 箱，上下蛇形編號)
+            const gridVisualList = document.getElementById('gridVisualList');
+            if (totalBoxes === 0) {
+                gridVisualList.innerHTML = `<p class="text-slate-500 text-center py-8 text-xs">尚無箱數紀錄, 請從下方點選或輸入顆數</p>`;
+            } else {
+                let sectionsHtml = '';
+                const totalSections = Math.ceil(totalBoxes / 20);
+
+                for (let s = 0; s < totalSections; s++) {
+                    const sectionStartIdx = s * 20;
+                    const sectionEndIdx = Math.min(sectionStartIdx + 20, totalBoxes);
+
+                    let topRowHtml = '';
+                    let bottomRowHtml = '';
+
+                    for (let col = 0; col < 10; col++) {
+                        // 上排箱號序位 (例如第一行上方是第 1 箱，第二行上方是第 3 箱...)
+                        const topArrIdx = sectionStartIdx + (col * 2);
+                        if (topArrIdx < totalBoxes) {
+                            const r = records[topArrIdx];
+                            const boxNum = topArrIdx + 1;
+                            topRowHtml += `
+                                <div onclick="openEditModal(${topArrIdx})" class="bg-slate-800 hover:bg-amber-700 cursor-pointer border border-slate-700 rounded-lg p-1 text-center shadow-md flex flex-col items-center justify-center transition">
+                                    <span class="text-[7px] text-slate-400 font-bold">#${boxNum}</span>
+                                    <span class="text-xs sm:text-sm font-black text-amber-400">${r.count}</span>
+                                    <span class="text-[6px] text-slate-400">顆</span>
+                                </div>
+                            `;
+                        } else {
+                            topRowHtml += `<div class="bg-slate-800/40 border border-slate-700/30 rounded-lg p-1 opacity-25"></div>`;
+                        }
+
+                        // 下排箱號序位 (例如第一行下方是第 2 箱，第二行下方是第 4 箱...)
+                        const bottomArrIdx = sectionStartIdx + (col * 2) + 1;
+                        if (bottomArrIdx < totalBoxes) {
+                            const r = records[bottomArrIdx];
+                            const boxNum = bottomArrIdx + 1;
+                            bottomRowHtml += `
+                                <div onclick="openEditModal(${bottomArrIdx})" class="bg-slate-800 hover:bg-amber-700 cursor-pointer border border-slate-700 rounded-lg p-1 text-center shadow-md flex flex-col items-center justify-center transition">
+                                    <span class="text-[7px] text-slate-400 font-bold">#${boxNum}</span>
+                                    <span class="text-xs sm:text-sm font-black text-amber-400">${r.count}</span>
+                                    <span class="text-[6px] text-slate-400">顆</span>
+                                </div>
+                            `;
+                        } else {
+                            bottomRowHtml += `<div class="bg-slate-800/40 border border-slate-700/30 rounded-lg p-1 opacity-25"></div>`;
+                        }
+                    }
+
+                    sectionsHtml += `
+                        <div class="bg-slate-800/90 border border-slate-700/80 rounded-xl p-2.5 space-y-1.5">
+                            <div class="text-[10px] font-bold text-slate-300 flex justify-between px-0.5">
+                                <span class="text-amber-400 font-black">第 ${s + 1} 區 (箱序 #${sectionStartIdx + 1} ~ #${sectionEndIdx})</span>
+                                <span class="text-slate-400">上下對應編號</span>
+                            </div>
+                            <!-- 上排 10 欄 -->
+                            <div class="grid grid-cols-10 gap-1">
+                                ${topRowHtml}
+                            </div>
+                            <!-- 下排 10 欄 -->
+                            <div class="grid grid-cols-10 gap-1">
+                                ${bottomRowHtml}
+                            </div>
+                        </div>
+                    `;
+                }
+                gridVisualList.innerHTML = sectionsHtml;
+            }
+
+            // 3. 輸入明細列表
+            const historyList = document.getElementById('historyList');
+            if (records.length === 0) {
+                historyList.innerHTML = `<p class="text-slate-400 text-center py-4">無紀錄</p>`;
+            } else {
+                const reversedRecords = [...records].map((r, idx) => ({ ...r, originalIndex: idx })).reverse();
+                historyList.innerHTML = reversedRecords.map((r) => `
+                    <div class="flex items-center justify-between bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-100">
+                        <div class="flex items-center gap-2">
+                            <span class="font-bold text-slate-400">#${r.originalIndex + 1}</span>
+                            <span class="font-bold text-amber-900">${r.count} 顆裝</span>
+                            <span class="text-[10px] text-slate-400">${r.time}</span>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <button onclick="openEditModal(${r.originalIndex})" class="bg-amber-100 hover:bg-amber-200 text-amber-900 px-2 py-0.5 rounded font-bold text-[11px] transition">
+                                修改
+                            </button>
+                            <button onclick="deleteRecord(${r.originalIndex})" class="text-slate-400 hover:text-rose-600 px-2 py-0.5 rounded font-bold text-xs">
+                                ✕
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        }
+
+        function exportReport() {
+            if (records.length === 0) {
+                showToast('沒有資料可供複製！');
+                return;
+            }
+
+            const countsMap = {};
+            records.forEach(r => {
+                countsMap[r.count] = (countsMap[r.count] || 0) + 1;
+            });
+
+            let text = `【黃雅智有機木瓜出貨統計】\n`;
+            if (reportDate) text += `日期：${reportDate}\n`;
+            if (reportClient) text += `客戶：${reportClient}\n`;
+            text += `總箱數：${records.length} 箱\n`;
+            text += `--------------------\n`;
+
+            const sortedKeys = Object.keys(countsMap).map(Number).sort((a,b) => a - b);
+            sortedKeys.forEach(k => {
+                text += `${k} 顆裝：${countsMap[k]} 箱\n`;
+            });
+
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+
+            showToast('📋 已複製文字清單，可直接貼給廠商！');
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toastMsg').innerText = msg;
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 1800);
+        }
+    </script>
+</body>
+</html>
