@@ -106,10 +106,13 @@
                         📦 倉庫出貨
                     </h2>
                     <span class="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded-md font-normal">點擊可更改</span>
-                    <!-- 允許自由填寫每區箱數 -->
-                    <div class="flex items-center gap-1 bg-slate-800 px-2.5 py-0.5 rounded-lg text-xs ml-2">
-                        <span class="text-slate-400 text-[11px]">每區箱數:</span>
-                        <input type="number" id="boxesPerZoneInput" min="2" max="100" value="20" onchange="changeBoxesPerZone(this.value)" class="bg-slate-700 text-amber-300 font-bold px-1.5 py-0.5 rounded border border-slate-600 focus:outline-none w-14 text-center text-xs">
+                    
+                    <!-- 允許自訂長度 (每排寬度) 與高度 (排數) 以決定每區箱數 -->
+                    <div class="flex items-center gap-1.5 bg-slate-800 px-2 py-1 rounded-lg text-xs ml-1">
+                        <span class="text-slate-400 text-[11px]">每區規格:</span>
+                        <input type="number" id="zoneColsInput" min="1" max="20" value="10" onchange="updateZoneDimensions()" class="bg-slate-700 text-amber-300 font-bold px-1.5 py-0.5 rounded border border-slate-600 focus:outline-none w-10 text-center text-xs" title="每排箱數(寬)">
+                        <span class="text-slate-500">×</span>
+                        <input type="number" id="zoneRowsInput" min="1" max="10" value="2" onchange="updateZoneDimensions()" class="bg-slate-700 text-amber-300 font-bold px-1.5 py-0.5 rounded border border-slate-600 focus:outline-none w-10 text-center text-xs" title="排數(高)">
                     </div>
                 </div>
                 <div class="flex items-center gap-2">
@@ -206,7 +209,8 @@
         let reportDate = new Date().toISOString().split('T')[0];
         let reportClient = '';
         let editingIndex = null;
-        let boxesPerZone = 20; // 預設每區 20 箱 (上下各 10)
+        let zoneCols = 10; // 預設每排 10 箱 (寬)
+        let zoneRows = 2;  // 預設 2 排 (高)
 
         // 常用木瓜數量清單 (10 ~ 55)
         const popularSizes = [
@@ -224,11 +228,14 @@
             reportDate = new Date().toISOString().split('T')[0];
             records = JSON.parse(localStorage.getItem('papaya_simple_records_v19')) || [];
             reportClient = localStorage.getItem('papaya_simple_client_v19') || '';
-            boxesPerZone = parseInt(localStorage.getItem('papaya_boxes_per_zone_v19')) || 20;
+            
+            zoneCols = parseInt(localStorage.getItem('papaya_zone_cols_v21')) || 10;
+            zoneRows = parseInt(localStorage.getItem('papaya_zone_rows_v21')) || 2;
             
             document.getElementById('reportDate').value = reportDate;
             document.getElementById('reportClient').value = reportClient;
-            document.getElementById('boxesPerZoneInput').value = boxesPerZone;
+            document.getElementById('zoneColsInput').value = zoneCols;
+            document.getElementById('zoneRowsInput').value = zoneRows;
 
             document.getElementById('reportDate').addEventListener('change', (e) => {
                 reportDate = e.target.value;
@@ -255,17 +262,23 @@
             renderAll();
         };
 
-        window.changeBoxesPerZone = function(val) {
-            const num = parseInt(val);
-            if (isNaN(num) || num <= 1) {
-                showToast('每區箱數至少需為 2 顆以上！');
-                document.getElementById('boxesPerZoneInput').value = boxesPerZone;
+        window.updateZoneDimensions = function() {
+            const cols = parseInt(document.getElementById('zoneColsInput').value);
+            const rows = parseInt(document.getElementById('zoneRowsInput').value);
+            
+            if (isNaN(cols) || cols < 1 || isNaN(rows) || rows < 1) {
+                showToast('長度與高度請輸入大於 0 的數字！');
+                document.getElementById('zoneColsInput').value = zoneCols;
+                document.getElementById('zoneRowsInput').value = zoneRows;
                 return;
             }
-            boxesPerZone = num;
-            localStorage.setItem('papaya_boxes_per_zone_v19', boxesPerZone);
+            
+            zoneCols = cols;
+            zoneRows = rows;
+            localStorage.setItem('papaya_zone_cols_v21', zoneCols);
+            localStorage.setItem('papaya_zone_rows_v21', zoneRows);
             renderAll();
-            showToast(`已更新每區為 ${boxesPerZone} 箱`);
+            showToast(`已更新每區規格：每排 ${zoneCols} 箱 × ${zoneRows} 排 (每區 ${zoneCols * zoneRows} 箱)`);
         };
 
         window.saveToLocal = function() {
@@ -367,66 +380,60 @@
             });
 
             const sortedKeys = Object.keys(countsMap).map(Number).sort((a,b) => a - b);
-            
-            const summaryList = document.getElementById('summaryList');
-            if (sortedKeys.length === 0) {
-                summaryList.innerHTML = `<p class="text-slate-400 text-center py-4 text-xs">尚無登記資料</p>`;
-            } else {
-                summaryList.innerHTML = sortedKeys.map(k => `
-                    <div class="flex justify-between items-center py-1.5 px-3 bg-white rounded-lg border border-slate-100 shadow-2xs">
-                        <span class="font-bold text-amber-900">${k}顆</span>
-                        <span class="font-black text-slate-800 text-base">${countsMap[k]} 箱</span>
-                    </div>
-                `).join('');
-            }
-
-            // 2. 倉庫出貨圖 (精確蛇行排版，支援自由自訂每區箱數)
+            // 2. 倉庫出貨圖 (精確垂直縱向排序，依據紅色箭頭由上往下填滿每一欄)
             const gridVisualList = document.getElementById('gridVisualList');
             if (totalBoxes === 0) {
                 gridVisualList.innerHTML = `<p class="text-slate-500 text-center py-8 text-xs">尚無箱數紀錄，請從下方點選或輸入數量</p>`;
             } else {
                 let sectionsHtml = '';
-                const perSection = boxesPerZone;
+                const perSection = zoneCols * zoneRows;
                 const totalSections = Math.ceil(totalBoxes / perSection);
-                const halfCol = Math.ceil(perSection / 2);
 
                 for (let s = 0; s < totalSections; s++) {
                     const sectionStartIdx = s * perSection;
                     const sectionEndIdx = Math.min(sectionStartIdx + perSection, totalBoxes);
+                    const currentSectionCount = sectionEndIdx - sectionStartIdx;
 
-                    let topRowHtml = '';
-                    let bottomRowHtml = '';
+                    // 建立一個二維矩陣 [rows][cols] 來暫存這一區的格子資料，確保能按欄位（由上往下）順序填入箱號
+                    let gridMatrix = Array.from({ length: zoneRows }, () => Array(zoneCols).fill(null));
 
-                    for (let c = 0; c < halfCol; c++) {
-                        // 上排編號 (奇數項：#1, #3, ...)
-                        const topArrIdx = sectionStartIdx + (c * 2);
-                        if (topArrIdx < totalBoxes) {
-                            const r = records[topArrIdx];
-                            const boxNum = topArrIdx + 1;
-                            topRowHtml += `
-                                <div onclick="openEditModal(${topArrIdx})" class="bg-slate-800 hover:bg-amber-700 cursor-pointer border border-slate-700 rounded-lg p-1 text-center shadow-md flex flex-col items-center justify-center transition">
-                                    <span class="text-[7px] text-slate-400 font-bold">#${boxNum}</span>
-                                    <span class="text-xs sm:text-sm font-black text-amber-400">${r.count}</span>
-                                </div>
-                            `;
-                        } else {
-                            topRowHtml += `<div class="bg-slate-800/40 border border-slate-700/30 rounded-lg p-1 opacity-25"></div>`;
+                    let itemCounter = 0;
+                    for (let c = 0; c < zoneCols; c++) {
+                        for (let r = 0; r < zoneRows; r++) {
+                            if (itemCounter < currentSectionCount) {
+                                const realRecordIdx = sectionStartIdx + itemCounter;
+                                gridMatrix[r][c] = {
+                                    recordIdx: realRecordIdx,
+                                    boxNum: realRecordIdx + 1,
+                                    data: records[realRecordIdx]
+                                };
+                                itemCounter++;
+                            }
                         }
+                    }
 
-                        // 下排編號 (偶數項：#2, #4, ...)
-                        const bottomArrIdx = sectionStartIdx + (c * 2) + 1;
-                        if (bottomArrIdx < totalBoxes) {
-                            const r = records[bottomArrIdx];
-                            const boxNum = bottomArrIdx + 1;
-                            bottomRowHtml += `
-                                <div onclick="openEditModal(${bottomArrIdx})" class="bg-slate-800 hover:bg-amber-700 cursor-pointer border border-slate-700 rounded-lg p-1 text-center shadow-md flex flex-col items-center justify-center transition">
-                                    <span class="text-[7px] text-slate-400 font-bold">#${boxNum}</span>
-                                    <span class="text-xs sm:text-sm font-black text-amber-400">${r.count}</span>
-                                </div>
-                            `;
-                        } else {
-                            bottomRowHtml += `<div class="bg-slate-800/40 border border-slate-700/30 rounded-lg p-1 opacity-25"></div>`;
+                    let rowsHtml = '';
+                    for (let rIdx = 0; rIdx < zoneRows; rIdx++) {
+                        let rowCellsHtml = '';
+                        for (let cIdx = 0; cIdx < zoneCols; cIdx++) {
+                            const cellObj = gridMatrix[rIdx][cIdx];
+                            if (cellObj) {
+                                rowCellsHtml += `
+                                    <div onclick="openEditModal(${cellObj.recordIdx})" class="bg-slate-800 hover:bg-amber-700 cursor-pointer border border-slate-700 rounded-lg p-1 text-center shadow-md flex flex-col items-center justify-center transition">
+                                        <span class="text-[7px] text-slate-400 font-bold">#${cellObj.boxNum}</span>
+                                        <span class="text-xs sm:text-sm font-black text-amber-400">${cellObj.data.count}</span>
+                                    </div>
+                                `;
+                            } else {
+                                rowCellsHtml += `<div class="bg-slate-800/40 border border-slate-700/30 rounded-lg p-1 opacity-25"></div>`;
+                            }
                         }
+                        
+                        rowsHtml += `
+                            <div class="grid grid-cols-${zoneCols} gap-1">
+                                ${rowCellsHtml}
+                            </div>
+                        `;
                     }
 
                     sectionsHtml += `
@@ -434,14 +441,7 @@
                             <div class="text-[10px] font-bold text-slate-300 flex justify-between px-0.5">
                                 <span class="text-amber-400 font-black">第 ${s + 1} 區 (箱序 #${sectionStartIdx + 1} ~ #${sectionEndIdx})</span>
                             </div>
-                            <!-- 上排 -->
-                            <div class="grid grid-cols-${halfCol} gap-1">
-                                ${topRowHtml}
-                            </div>
-                            <!-- 下排 -->
-                            <div class="grid grid-cols-${halfCol} gap-1">
-                                ${bottomRowHtml}
-                            </div>
+                            ${rowsHtml}
                         </div>
                     `;
                 }
